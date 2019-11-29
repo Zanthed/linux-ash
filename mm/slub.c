@@ -1586,6 +1586,18 @@ static inline bool slab_free_freelist_hook(struct kmem_cache *s,
 			*head = object;
 			if (!*tail)
 				*tail = object;
+		} else if (slab_want_init_on_free(s) && s->ctor) {
+			/* Objects that are put into quarantine by KASAN will
+			 * still undergo free_consistency_checks() and thus
+			 * need to show a valid freepointer to check_object().
+			 *
+			 * Note that doing this for all caches (not just ctor
+			 * ones, which have s->offset >= object_size)) causes a
+			 * GPF, due to KASAN poisoning and the way
+			 * set_freepointer() eventually dereferences the
+			 * freepointer.
+			 */
+			set_freepointer(s, object, NULL);
 		}
 	} while (object != old_tail);
 
@@ -2949,8 +2961,23 @@ redo:
 
 	maybe_wipe_obj_freeptr(s, object);
 
-	if (unlikely(slab_want_init_on_alloc(gfpflags, s)) && object)
+	if (has_sanitize_verify(s) && object) {
+		/* KASAN hasn't unpoisoned the object yet (this is done in the
+		 * post-alloc hook), so let's do it temporarily.
+		 */
+		kasan_unpoison_object_data(s, object);
+		BUG_ON(memchr_inv(object, 0, s->object_size));
+		if (s->ctor)
+			s->ctor(object);
+		kasan_poison_object_data(s, object);
+	} else if (unlikely(slab_want_init_on_alloc(gfpflags, s)) && object) {
 		memset(object, 0, s->object_size);
+		if (s->ctor) {
+			kasan_unpoison_object_data(s, object);
+			s->ctor(object);
+			kasan_poison_object_data(s, object);
+		}
+	}
 
 	slab_post_alloc_hook(s, objcg, gfpflags, 1, &object);
 
@@ -3398,8 +3425,14 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
 	if (unlikely(slab_want_init_on_alloc(flags, s))) {
 		int j;
 
-		for (j = 0; j < i; j++)
+		for (j = 0; j < i; j++) {
 			memset(p[j], 0, s->object_size);
+			if (s->ctor) {
+				kasan_unpoison_object_data(s, p[j]);
+				s->ctor(p[j]);
+				kasan_poison_object_data(s, p[j]);
+			}
+		}
 	}
 
 	/* memcg and kmem_cache debug support */
