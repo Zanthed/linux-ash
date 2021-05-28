@@ -34,7 +34,6 @@ static int external_module = 0;
 static int warn_unresolved = 0;
 /* How a symbol is exported */
 static int sec_mismatch_count = 0;
-static int writable_fptr_count = 0;
 static int sec_mismatch_fatal = 0;
 static int writable_fptr_count = 0;
 static int writable_fptr_verbose = 0;
@@ -2696,20 +2695,12 @@ int main(int argc, char **argv)
 	}
 
 	free(buf.p);
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
+
 	if (writable_fptr_count && !writable_fptr_verbose)
 		warn("modpost: Found %d writable function pointer%s.\n"
 		     "To see full details build your kernel with:\n"
 		     "'make CONFIG_DEBUG_WRITABLE_FUNCTION_POINTERS_VERBOSE=y'\n",
 		     writable_fptr_count, (writable_fptr_count == 1 ? "" : "s"));
->>>>>>> f9aecc69c882 (modpost: Add CONFIG_DEBUG_WRITABLE_FUNCTION_POINTERS_VERBOSE)
-=======
-	if (writable_fptr_count)
-		warn("modpost: Found %d writable function pointer(s).\n",
-		     writable_fptr_count);
->>>>>>> 89730e9f7f41 (add writable function pointer detection)
 
 	return err;
 }
